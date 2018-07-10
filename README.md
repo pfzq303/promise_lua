@@ -1,0 +1,3 @@
+# promise_lua
+lua实现的promise
+延时用到一点点cocoslua的部分。这个细节可具体根据环境进行修改
