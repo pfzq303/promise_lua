@@ -138,6 +138,7 @@ handleResolved = function (promise, deferred)
             else
                 reject(deferred.promise, promise._value)
             end
+            return
         end
         local ret = tryCall(cb, promise._value)
         if ret == IS_ERROR then
@@ -282,7 +283,7 @@ Promise.all = function (arr)
                     end
                     if val._state == PromiseState.fulfilled then return res(i, val._value) end
                     if val._state == PromiseState.rejected then reject(val._value) end
-                    val.Then(function (val) 
+                    val:Then(function (val) 
                         res(i, val)
                     end, reject)
                     return
@@ -340,5 +341,54 @@ function Promise:finally(f)
         end)
     end)
 end
+
+function Promise:getState() 
+    if self._state == PromiseState.waiting then
+        return self._value:getState()
+    end
+    if self._state == PromiseState.pending 
+        or self._state ==  PromiseState.fulfilled
+        or self._state ==  PromiseState.rejected then
+        return self._state;
+    end
+    return PromiseState.pending
+end
+
+function Promise:isPending() 
+    return self:getState() == PromiseState.pending
+end
+
+function Promise:isFulfilled() 
+    return self:getState() == PromiseState.fulfilled
+end
+
+function Promise:isRejected() 
+    return self:getState() == PromiseState.rejected
+end
+
+function Promise:getValue() 
+    if self._state == PromiseState.waiting then
+      return self._value:getValue()
+    end
+
+    if not self:isFulfilled() then
+        error('Cannot get a value of an unfulfilled promise.')
+        return
+    end
+    return self._value
+end
+
+function Promise:getReason() 
+    if self._state == PromiseState.waiting then
+      return self._value:getReason()
+    end
+
+    if not self:isRejected() then
+        error('Cannot get a value of a non-rejected promise.')
+        return
+    end
+    return self._value
+end
+
 
 return Promise
