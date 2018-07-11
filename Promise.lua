@@ -22,16 +22,23 @@ local reject
 local Handler
 local safeThen
 
+local OPEN_DELAY = true
+
 -- ÑÓ³Ùµ÷ÓÃ
 delayCall = function (func)
-    _queue[#_queue + 1] = func
-    if #_queue == 1 then
-        scheduler.performWithDelayGlobal(function ()
-            for _ , v in ipairs(_queue) do
-                v()
-            end
-            _queue = {}
-        end, 0)
+    if OPEN_DELAY then
+        _queue[#_queue + 1] = func
+        if #_queue == 1 then
+            scheduler.performWithDelayGlobal(function ()
+                local i = 1
+                while i <= #_queue do
+                    _queue[i]()
+                end
+                _queue = {}
+            end, 0)
+        end
+    else
+        func()
     end
 end
 
