@@ -1,3 +1,5 @@
+-- https://github.com/pfzq303/promise_lua
+
 local Promise = class("Promise")
 local PromiseState = {
     pending = 0,
@@ -7,7 +9,7 @@ local PromiseState = {
 }
 
 local LAST_ERROR
-local IS_ERROR = {} -- ÓÃÒ»¸ö¶ÔÏóÀ´±êÊ¶´íÎó½á¹û
+local IS_ERROR = {} -- ç”¨ä¸€ä¸ªå¯¹è±¡æ¥æ ‡è¯†é”™è¯¯ç»“æœ
 local _queue = {}
 
 local tryCall
@@ -24,25 +26,35 @@ local safeThen
 
 local OPEN_DELAY = true
 
--- ÑÓ³Ùµ÷ÓÃ
+local ccNextFrame = function(func)
+    local callbackEntry = nil
+    local function callback(dt)
+        func();
+        cc.Director:getInstance():getScheduler():unscheduleScriptEntry(callbackEntry)
+    end
+    callbackEntry = cc.Director:getInstance():getScheduler():scheduleScriptFunc(callback, 0, false)
+end
+
+-- å»¶è¿Ÿè°ƒç”¨
 delayCall = function (func)
     if OPEN_DELAY then
         _queue[#_queue + 1] = func
         if #_queue == 1 then
-            scheduler.performWithDelayGlobal(function ()
+            ccNextFrame(function ()
                 local i = 1
                 while i <= #_queue do
                     _queue[i]()
+                    i = i + 1
                 end
                 _queue = {}
-            end, 0)
+            end)
         end
     else
         func()
     end
 end
 
---µ÷ÓÃº¯Êı¡£Òì³£Ê±¼ÇÂ¼´íÎó£¬²¢·µ»Ø´íÎó¶ÔÏó
+--è°ƒç”¨å‡½æ•°ã€‚å¼‚å¸¸æ—¶è®°å½•é”™è¯¯ï¼Œå¹¶è¿”å›é”™è¯¯å¯¹è±¡
 tryCall = function(fn, ...)
     local args = {...}
     local status , ret = xpcall(function()
@@ -57,7 +69,7 @@ tryCall = function(fn, ...)
     end
 end
 
--- »ñÈ¡¶ÔÏóµÄThenº¯Êı¡£Èç¹û»ñÈ¡ÖĞÊ§°Ü£¬¼ÇÂ¼´íÎó²¢·µ»Ø´íÎó¶ÔÏó
+-- è·å–å¯¹è±¡çš„Thenå‡½æ•°ã€‚å¦‚æœè·å–ä¸­å¤±è´¥ï¼Œè®°å½•é”™è¯¯å¹¶è¿”å›é”™è¯¯å¯¹è±¡
 getThen = function (obj)
     local status , ret = xpcall(function()
         return obj.Then
@@ -71,10 +83,10 @@ getThen = function (obj)
     end
 end
 
--- Ö´ĞĞpromiseµÄ¹¹Ôìº¯Êı¡£È¥·¢ËÍ³É¹¦Ê§°ÜµÄ×´Ì¬ÇĞ»»¡£
+-- æ‰§è¡Œpromiseçš„æ„é€ å‡½æ•°ã€‚å»å‘é€æˆåŠŸå¤±è´¥çš„çŠ¶æ€åˆ‡æ¢ã€‚
 doResolve = function (promise , fn)
     local done = false;
-    -- ½«»Øµ÷µÄÖµ´«µİÏÂÈ¥²¢±ê¼Ç
+    -- å°†å›è°ƒçš„å€¼ä¼ é€’ä¸‹å»å¹¶æ ‡è®°
     local ret = tryCall(fn, function (value)
         if (done) then return end
         done = true
@@ -90,19 +102,19 @@ doResolve = function (promise , fn)
     end
 end
 
--- ÔÚ promise Íê³ÉµÄÊ±ºòÖ´ĞĞ»Øµ÷£¬ÄÜ´¦Àí¾ÍÖ±½Ó´¦Àí¡£²»ÄÜ´¦Àí¾ÍÑÓ³Ùµ½
+-- åœ¨ promise å®Œæˆçš„æ—¶å€™æ‰§è¡Œå›è°ƒï¼Œèƒ½å¤„ç†å°±ç›´æ¥å¤„ç†ã€‚ä¸èƒ½å¤„ç†å°±å»¶è¿Ÿåˆ°
 handle = function (promise, deferred) 
-    -- Èç¹ûµ±Ç°×´Ì¬ÊÇwaiting×´Ì¬¡£±íÊ¾ËûĞèÒªµÈ´ıµ½ËûµÄ×ÓpromiseÖ´ĞĞ½áÊøÊ±»Øµ÷
-    --»ñÈ¡µ½×îºóµÄÄÇ¸öpromise
+    -- å¦‚æœå½“å‰çŠ¶æ€æ˜¯waitingçŠ¶æ€ã€‚è¡¨ç¤ºä»–éœ€è¦ç­‰å¾…åˆ°ä»–çš„å­promiseæ‰§è¡Œç»“æŸæ—¶å›è°ƒ
+    --è·å–åˆ°æœ€åçš„é‚£ä¸ªpromise
 	while (promise._state == PromiseState.waiting) do
 		promise = promise._value;
 	end
 	if Promise._onHandle then
 		Promise._onHandle(promise);
 	end
-    -- Èç¹ûÊÇ×îºóµÄÄÇ¸öpromise»¹ÔÚµÈ´ıÖĞ£¬ÄÇÃ´½«deferred´æ´¢ÆğÀ´
+    -- å¦‚æœæ˜¯æœ€åçš„é‚£ä¸ªpromiseè¿˜åœ¨ç­‰å¾…ä¸­ï¼Œé‚£ä¹ˆå°†deferredå­˜å‚¨èµ·æ¥
 	if promise._state == PromiseState.pending then
-        -- _deferredState £º 0±íÊ¾ÎŞÖµ¡£1 ±íÊ¾µ¥Öµ¡£2±íÊ¾ÁĞ±í
+        -- _deferredState ï¼š 0è¡¨ç¤ºæ— å€¼ã€‚1 è¡¨ç¤ºå•å€¼ã€‚2è¡¨ç¤ºåˆ—è¡¨
 		if promise._deferredState == 0 then
 			promise._deferredState = 1
 			promise._deferreds = deferred
@@ -116,11 +128,11 @@ handle = function (promise, deferred)
 		table.insert(promise._deferreds , deferred)
 		return
 	end
-    -- ·ñÔòÖ±½Ó´¦Àí
+    -- å¦åˆ™ç›´æ¥å¤„ç†
 	handleResolved(promise, deferred);
 end
 
--- promiseµÄÖÕ½á´¦¡£Èç¹ûÔÚ¶ÓÁĞÖĞ¡£ËûµÄ»Øµ÷»áÒÆ½»¸ø×îºóµÄÄÇ¸öpromise
+-- promiseçš„ç»ˆç»“å¤„ã€‚å¦‚æœåœ¨é˜Ÿåˆ—ä¸­ã€‚ä»–çš„å›è°ƒä¼šç§»äº¤ç»™æœ€åçš„é‚£ä¸ªpromise
 finale =  function (promise)
 	if promise._deferredState == 1 then
 		handle(promise, promise._deferreds);
@@ -134,11 +146,11 @@ finale =  function (promise)
 	end
 end
 
--- ÕæÕıµÄ´¦ÀíThenµÄµØ·½£¬½«ÉÏ¸öpromiseµÄ·µ»ØÖµ´«µİµ½ÏÂÒ»¸ö
+-- çœŸæ­£çš„å¤„ç†Thençš„åœ°æ–¹ï¼Œå°†ä¸Šä¸ªpromiseçš„è¿”å›å€¼ä¼ é€’åˆ°ä¸‹ä¸€ä¸ª
 handleResolved = function (promise, deferred)
     delayCall(function()
         local cb = promise._state == PromiseState.fulfilled and deferred.onFulfilled or deferred.onRejected
-        -- Èç¹û²»´æÔÚ´¦Àíº¯Êı£¬ÄÇÃ´Ö±½Ó³É¹¦»òÕßÊ§°Ü
+        -- å¦‚æœä¸å­˜åœ¨å¤„ç†å‡½æ•°ï¼Œé‚£ä¹ˆç›´æ¥æˆåŠŸæˆ–è€…å¤±è´¥
         if not cb then
             if promise._state == PromiseState.fulfilled then
                 resolve(deferred.promise, promise._value)
@@ -156,40 +168,40 @@ handleResolved = function (promise, deferred)
     end)
 end
 
--- ³É¹¦×´Ì¬Ê±µÄ´¦ÀíÂß¼­
+-- æˆåŠŸçŠ¶æ€æ—¶çš„å¤„ç†é€»è¾‘
 resolve = function (promise , newValue)
-    -- PromiseµÄA+±ê×¼£º https://github.com/promises-aplus/promises-spec#the-promise-resolution-procedure
+    -- Promiseçš„A+æ ‡å‡†ï¼š https://github.com/promises-aplus/promises-spec#the-promise-resolution-procedure
     if promise == newValue then
         error("TypeError:A promise cannot be resolved with itself.")
         return
     end
-    -- Èç¹û·µ»ØÖµÊÇ¸öThenableµÄ¶ÔÏóĞèÒª½øĞĞ¼ÇÂ¼ÆğÀ´
+    -- å¦‚æœè¿”å›å€¼æ˜¯ä¸ªThenableçš„å¯¹è±¡éœ€è¦è¿›è¡Œè®°å½•èµ·æ¥
     if newValue and type(newValue) == 'table' then
         local t = getThen(newValue)
         if t == IS_ERROR then
             return reject(promise, LAST_ERROR)
         end
-        --Èç¹ûÊÇ¸öPromiseµÄ¶ÔÏó¡££¨Ö±½Ó¼Ì³Ğ»ò¼ä½Ó¼Ì³Ğ¾ù¿É£©£¬ÒÆ½»»Øµ÷²¢ÇĞ»»×´Ì¬
+        --å¦‚æœæ˜¯ä¸ªPromiseçš„å¯¹è±¡ã€‚ï¼ˆç›´æ¥ç»§æ‰¿æˆ–é—´æ¥ç»§æ‰¿å‡å¯ï¼‰ï¼Œç§»äº¤å›è°ƒå¹¶åˆ‡æ¢çŠ¶æ€
         if iskindof(newValue , Promise) then
             promise._state = PromiseState.waiting
             promise._value = newValue
             finale(promise)
             return
         elseif type(t) == 'function' then
-            -- Èç¹ûÊÇ¸öº¯Êı¡£×´Ì¬²»±ä¡£ÄÇÃ´promiseµÄ´¥·¢È¨ÀûÒÆ½»¸øÕâ¸öº¯Êı£¬Ö´ĞĞ¸Ãº¯Êı¡£
+            -- å¦‚æœæ˜¯ä¸ªå‡½æ•°ã€‚çŠ¶æ€ä¸å˜ã€‚é‚£ä¹ˆpromiseçš„è§¦å‘æƒåˆ©ç§»äº¤ç»™è¿™ä¸ªå‡½æ•°ï¼Œæ‰§è¡Œè¯¥å‡½æ•°ã€‚
             doResolve(promise, function(...)
                 t(newValue , ...)
             end)
             return
         end
     end
-    --²»ÊÇThenableµÄ¶ÔÏó¡£Ö±½Ó³É¹¦
+    --ä¸æ˜¯Thenableçš„å¯¹è±¡ã€‚ç›´æ¥æˆåŠŸ
     promise._state = PromiseState.fulfilled
     promise._value = newValue
     finale(promise)
 end
 
---Ê§°ÜµÄ´¦Àí
+--å¤±è´¥çš„å¤„ç†
 reject = function (promise , reason)
     promise._state = PromiseState.rejected
     promise._value = reason
@@ -199,7 +211,7 @@ reject = function (promise , reason)
     finale(promise)
 end
 
--- ´´½¨Ò»¸ö½á¹¹´æ´¢»Øµ÷
+-- åˆ›å»ºä¸€ä¸ªç»“æ„å­˜å‚¨å›è°ƒ
 Handler = function(promise , onFulfilled, onRejected)
     local ret = {}
     ret.onFulfilled = type( onFulfilled ) == 'function' and onFulfilled
@@ -210,7 +222,7 @@ end
 
 function Promise:ctor(func)
     self._deferredState = 0
-    self._state = PromiseState.Pending
+    self._state = PromiseState.pending
     self._value = nil
     self._deferreds = nil
     if not func then return end
@@ -220,16 +232,16 @@ function Promise:ctor(func)
     end
     doResolve(self , func )
 end
--- ThenÊÇÓÃÀ´Ìí¼ÓÔÚ³É¹¦¡¢Ê§°ÜÊ±µÄ»Øµ÷¡£²¢´´½¨³öÒ»¸öĞÂµÄpromise¡£
--- Õâ¸öĞÂµÄpromiseµÄ³É¹¦ºÍÊ§°ÜºÍÕâ¸ö¶ÔÓ¦µÄ»Øµ÷´¦ÀíÓĞ¹Ø¡£
--- Èç¹ûº¯ÊıµÄ´«Èë²ÎÊıÊÇÉÏÒ»¸öpromiseµÄ³É¹¦»Øµ÷Öµ¡£Ö´ĞĞ³ö´íÔòĞÂµÄpromise reject, ·ñÔòfulfill
+-- Thenæ˜¯ç”¨æ¥æ·»åŠ åœ¨æˆåŠŸã€å¤±è´¥æ—¶çš„å›è°ƒã€‚å¹¶åˆ›å»ºå‡ºä¸€ä¸ªæ–°çš„promiseã€‚
+-- è¿™ä¸ªæ–°çš„promiseçš„æˆåŠŸå’Œå¤±è´¥å’Œè¿™ä¸ªå¯¹åº”çš„å›è°ƒå¤„ç†æœ‰å…³ã€‚
+-- å¦‚æœå‡½æ•°çš„ä¼ å…¥å‚æ•°æ˜¯ä¸Šä¸€ä¸ªpromiseçš„æˆåŠŸå›è°ƒå€¼ã€‚æ‰§è¡Œå‡ºé”™åˆ™æ–°çš„promise reject, å¦åˆ™fulfill
 function Promise:Then(onFulfilled , onRejected)
     local res = Promise.new()
     handle(self, Handler(res , onFulfilled, onRejected))
     return res
 end
 
--- ºÍThenÀàËÆ¡£µ«ÊÇ²»·µ»ØĞÂµÄpromise,Í¬Ê±»áÅ×³öÒì³£
+-- å’ŒThenç±»ä¼¼ã€‚ä½†æ˜¯ä¸è¿”å›æ–°çš„promise,åŒæ—¶ä¼šæŠ›å‡ºå¼‚å¸¸
 function Promise:done(onFulfilled , onRejected)
     local p = self:Then(onFulfilled, onRejected) or self
     p:Then(nil, function (err) 
@@ -237,7 +249,7 @@ function Promise:done(onFulfilled , onRejected)
     end)
 end
 
--- ²¶»ñÒì³£
+-- æ•è·å¼‚å¸¸
 function Promise:catch(onRejected) 
     return self:Then(nil, onRejected)
 end
@@ -255,7 +267,7 @@ local NULL = valuePromise(nil);
 local ZERO = valuePromise(0);
 local EMPTYSTRING = valuePromise('');
 
--- Ö±½Óresolve´«µİÖµµ½ÏÂÒ»²½£¬Èç¹ûÊÇpromise»òÕßThenableµÄ»°£¬°´ÕÕpromiseÀ´´«µİ
+-- ç›´æ¥resolveä¼ é€’å€¼åˆ°ä¸‹ä¸€æ­¥ï¼Œå¦‚æœæ˜¯promiseæˆ–è€…Thenableçš„è¯ï¼ŒæŒ‰ç…§promiseæ¥ä¼ é€’
 Promise.resolve = function (value) 
     if iskindof(value , Promise) then return value end
 
@@ -276,7 +288,7 @@ Promise.resolve = function (value)
     return valuePromise(value);
 end
 
--- Ö´ĞĞËùÓĞµÄpromise¡£µÈËùÓĞ½á¹ûÖ´ĞĞÍê³Éºó¡£Ò»Æğ·µ»Ø
+-- æ‰§è¡Œæ‰€æœ‰çš„promiseã€‚ç­‰æ‰€æœ‰ç»“æœæ‰§è¡Œå®Œæˆåã€‚ä¸€èµ·è¿”å›
 Promise.all = function (arr)
     return Promise.new(function (resolve, reject) 
         if #arr == 0 then return resolve({}) end
@@ -307,7 +319,7 @@ Promise.all = function (arr)
                     end
                 end
             end
-            -- Ö´ĞĞµ½ÕâÀïËµÃ÷ÒÑ¾­Íê³ÉÁËÖ´ĞĞ
+            -- æ‰§è¡Œåˆ°è¿™é‡Œè¯´æ˜å·²ç»å®Œæˆäº†æ‰§è¡Œ
             args[i] = val;
             remaining = remaining - 1
             if remaining == 0 then
@@ -320,14 +332,14 @@ Promise.all = function (arr)
     end)
 end
 
--- Ö±½Ó·µ»ØÒ»¸örejectedµÄpromise
+-- ç›´æ¥è¿”å›ä¸€ä¸ªrejectedçš„promise
 Promise.reject = function (value) 
     return Promise.new(function (resolve, reject) 
         reject(value);
     end)
 end
 
--- Ò»µ©Ä³¸öpromise½â¾ö»ò¾Ü¾ø£¬·µ»ØµÄ promise¾Í»á½â¾ö»ò¾Ü¾ø
+-- ä¸€æ—¦æŸä¸ªpromiseè§£å†³æˆ–æ‹’ç»ï¼Œè¿”å›çš„ promiseå°±ä¼šè§£å†³æˆ–æ‹’ç»
 Promise.race = function (values) 
     return Promise.new(function (resolve, reject) 
         for value , v in ipairs(values) do
@@ -336,7 +348,7 @@ Promise.race = function (values)
     end)
 end
 
---finally ·½·¨·µ»ØÒ»¸öPromise£¬ÔÚÖ´ĞĞthenºÍcatchºó£¬¶¼»áÖ´ĞĞfinallyÖ¸¶¨µÄ»Øµ÷º¯Êı
+--finally æ–¹æ³•è¿”å›ä¸€ä¸ªPromiseï¼Œåœ¨æ‰§è¡Œthenå’Œcatchåï¼Œéƒ½ä¼šæ‰§è¡ŒfinallyæŒ‡å®šçš„å›è°ƒå‡½æ•°
 function Promise:finally(f) 
     return self:Then(function (value) 
         return Promise.resolve(f()):Then(function () 
